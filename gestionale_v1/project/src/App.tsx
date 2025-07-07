@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Database, Activity, Settings, RotateCcw, Play, LogOut } from 'lucide-react';
+import { Database, Activity, Settings, RotateCcw, Play, LogOut, RefreshCw, Plus } from 'lucide-react';
 import { OracleProcedure } from './types';
-import { mockProcedures } from './data/mockData';
 import { useExecutions } from './hooks/useExecutions';
+import { useProcedures } from './hooks/useProcedures';
 import { Dashboard } from './components/Dashboard';
 import { ProcedureCard } from './components/ProcedureCard';
 import { ExecutionModal } from './components/ExecutionModal';
 import { ExecutionList } from './components/ExecutionList';
 import { ConnectionForm } from './components/ConnectionForm';
+import { ProcedureManager } from './components/ProcedureManager';
 import { connectToOracle, checkExistingConnection, getCurrentConnection, disconnect, ConnectionParams } from './services/oracleConnection';
 
 type TabType = 'dashboard' | 'procedures' | 'executions';
@@ -20,7 +21,10 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [selectedProcedure, setSelectedProcedure] = useState<OracleProcedure | null>(null);
   const [showExecutionModal, setShowExecutionModal] = useState(false);
+  const [showProcedureManager, setShowProcedureManager] = useState(false);
+  
   const { executions, stats, addExecution, clearExecutions } = useExecutions();
+  const { procedures, loading: proceduresLoading, error: proceduresError, refreshProcedures, updateProcedureStats } = useProcedures(isConnected);
 
   // Controlla se esiste una connessione esistente all'avvio
   useEffect(() => {
@@ -81,6 +85,20 @@ function App() {
     setActiveTab(tab);
   };
 
+  const handleExecutionComplete = async (execution: any) => {
+    addExecution(execution);
+    
+    // Aggiorna le statistiche della procedura se l'esecuzione è completata
+    if (execution.status === 'COMPLETED' && execution.duration) {
+      await updateProcedureStats(execution.procedureId, execution.duration);
+    }
+  };
+
+  const handleProcedureAdded = () => {
+    refreshProcedures();
+    setShowProcedureManager(false);
+  };
+
   // Se non connesso, mostra il form di connessione
   if (!isConnected) {
     return (
@@ -115,12 +133,31 @@ function App() {
               <div>
                 <h1 className="text-xl font-semibold text-gray-900">Oracle Procedure Monitor</h1>
                 <p className="text-sm text-gray-600">
-                  {connectionInfo?.host}:{connectionInfo?.port} - {connectionInfo?.owner}
+                  {connectionInfo?.host}:{connectionInfo?.port} - {connectionInfo?.owner} (SQLite Mode)
                 </p>
               </div>
             </div>
             
             <div className="flex items-center space-x-4">
+              <button
+                onClick={() => setShowProcedureManager(true)}
+                className="flex items-center space-x-2 px-3 py-2 text-sm text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-colors"
+                title="Crea nuova procedura"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Nuova Procedura</span>
+              </button>
+
+              <button
+                onClick={refreshProcedures}
+                className="flex items-center space-x-2 px-3 py-2 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+                title="Ricarica procedure dal database"
+                disabled={proceduresLoading}
+              >
+                <RefreshCw className={`h-4 w-4 ${proceduresLoading ? 'animate-spin' : ''}`} />
+                <span>Ricarica DB</span>
+              </button>
+
               <button
                 onClick={handleClearExecutions}
                 className="flex items-center space-x-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
@@ -141,7 +178,7 @@ function App() {
               
               <div className="flex items-center space-x-2">
                 <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="text-sm text-gray-600">Connected</span>
+                <span className="text-sm text-gray-600">Connected (SQLite)</span>
               </div>
             </div>
           </div>
@@ -191,11 +228,19 @@ function App() {
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Azioni Rapide</h3>
               <div className="flex flex-wrap gap-3">
                 <button
+                  onClick={() => setShowProcedureManager(true)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-green-500 text-white hover:bg-green-600 rounded-lg transition-colors"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Crea Procedura</span>
+                </button>
+
+                <button
                   onClick={() => setActiveTab('procedures')}
                   className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white hover:bg-blue-600 rounded-lg transition-colors"
                 >
                   <Database className="h-4 w-4" />
-                  <span>Visualizza Procedure</span>
+                  <span>Visualizza Procedure ({procedures.length})</span>
                 </button>
                 
                 {stats.activeExecutions > 0 && (
@@ -219,25 +264,76 @@ function App() {
                 )}
               </div>
             </div>
+
+            {/* Database Info Section */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Informazioni Database</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 bg-blue-50 rounded-lg">
+                  <h4 className="font-medium text-blue-900">Modalità Corrente</h4>
+                  <p className="text-sm text-blue-700 mt-1">SQLite (Sviluppo)</p>
+                  <p className="text-xs text-blue-600 mt-2">Database locale per test e sviluppo</p>
+                </div>
+                <div className="p-4 bg-green-50 rounded-lg">
+                  <h4 className="font-medium text-green-900">Procedure Caricate</h4>
+                  <p className="text-sm text-green-700 mt-1">{procedures.length} procedure disponibili</p>
+                  <p className="text-xs text-green-600 mt-2">Caricate da database SQLite</p>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
         {activeTab === 'procedures' && (
           <div className="space-y-8">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Procedures</h2>
-              <p className="text-gray-600">Available Oracle procedures for execution</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">Procedures</h2>
+                <p className="text-gray-600">Available Oracle procedures for execution</p>
+              </div>
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => setShowProcedureManager(true)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-green-500 text-white hover:bg-green-600 rounded-lg transition-colors"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Nuova Procedura</span>
+                </button>
+                <button
+                  onClick={refreshProcedures}
+                  disabled={proceduresLoading}
+                  className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white hover:bg-blue-600 disabled:bg-gray-400 rounded-lg transition-colors"
+                >
+                  <RefreshCw className={`h-4 w-4 ${proceduresLoading ? 'animate-spin' : ''}`} />
+                  <span>{proceduresLoading ? 'Caricamento...' : 'Ricarica'}</span>
+                </button>
+              </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {mockProcedures.map((procedure) => (
-                <ProcedureCard
-                  key={procedure.id}
-                  procedure={procedure}
-                  onExecute={handleExecuteProcedure}
-                  onViewDetails={handleExecuteProcedure}
-                />
-              ))}
-            </div>
+
+            {proceduresError && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <h4 className="font-medium text-red-900">Errore nel caricamento delle procedure</h4>
+                <p className="text-sm text-red-700 mt-1">{proceduresError}</p>
+              </div>
+            )}
+
+            {proceduresLoading ? (
+              <div className="text-center py-12">
+                <RefreshCw className="h-8 w-8 text-gray-400 mx-auto mb-4 animate-spin" />
+                <p className="text-gray-600">Caricamento procedure dal database...</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {procedures.map((procedure) => (
+                  <ProcedureCard
+                    key={procedure.id}
+                    procedure={procedure}
+                    onExecute={handleExecuteProcedure}
+                    onViewDetails={handleExecuteProcedure}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -287,7 +383,15 @@ function App() {
         <ExecutionModal
           procedure={selectedProcedure}
           onClose={handleCloseModal}
-          onExecute={addExecution}
+          onExecute={handleExecutionComplete}
+        />
+      )}
+
+      {/* Procedure Manager Modal */}
+      {showProcedureManager && (
+        <ProcedureManager
+          onProcedureAdded={handleProcedureAdded}
+          onClose={() => setShowProcedureManager(false)}
         />
       )}
     </div>
