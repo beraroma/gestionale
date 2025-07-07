@@ -23,13 +23,36 @@ export class ProcedureService {
     }
   }
 
-  // Aggiunge una nuova procedura (per future implementazioni)
+  // Aggiunge una nuova procedura
   public async addProcedure(procedure: Omit<OracleProcedure, 'id' | 'executionCount' | 'avgExecutionTime'>): Promise<string> {
     try {
       return this.db.addProcedure(procedure);
     } catch (error) {
       console.error('Errore nell\'aggiunta della procedura:', error);
       throw new Error('Impossibile aggiungere la procedura');
+    }
+  }
+
+  // Elimina una procedura
+  public async deleteProcedure(procedureId: string): Promise<boolean> {
+    try {
+      return this.db.deleteProcedure(procedureId);
+    } catch (error) {
+      console.error('Errore nell\'eliminazione della procedura:', error);
+      throw new Error('Impossibile eliminare la procedura');
+    }
+  }
+
+  // Ottieni statistiche database
+  public async getDatabaseStats() {
+    try {
+      return {
+        totalProcedures: this.db.getProcedureCount(),
+        schemas: this.db.getSchemas()
+      };
+    } catch (error) {
+      console.error('Errore nel caricamento delle statistiche:', error);
+      return { totalProcedures: 0, schemas: [] };
     }
   }
 

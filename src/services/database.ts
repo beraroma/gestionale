@@ -245,6 +245,26 @@ class DatabaseService {
     return id;
   }
 
+  public deleteProcedure(procedureId: string) {
+    // Elimina prima i parametri (foreign key)
+    this.db.prepare('DELETE FROM procedure_parameters WHERE procedure_id = ?').run(procedureId);
+    
+    // Poi elimina la procedura
+    const result = this.db.prepare('DELETE FROM procedures WHERE id = ?').run(procedureId);
+    
+    return result.changes > 0;
+  }
+
+  public getProcedureCount(): number {
+    const result = this.db.prepare('SELECT COUNT(*) as count FROM procedures').get() as { count: number };
+    return result.count;
+  }
+
+  public getSchemas(): string[] {
+    const schemas = this.db.prepare('SELECT DISTINCT schema_name FROM procedures ORDER BY schema_name').all() as { schema_name: string }[];
+    return schemas.map(s => s.schema_name);
+  }
+
   public close() {
     this.db.close();
   }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Database, Activity, Settings, RotateCcw, Play, LogOut, RefreshCw } from 'lucide-react';
+import { Database, Activity, Settings, RotateCcw, Play, LogOut, RefreshCw, Plus } from 'lucide-react';
 import { OracleProcedure } from './types';
 import { useExecutions } from './hooks/useExecutions';
 import { useProcedures } from './hooks/useProcedures';
@@ -8,6 +8,7 @@ import { ProcedureCard } from './components/ProcedureCard';
 import { ExecutionModal } from './components/ExecutionModal';
 import { ExecutionList } from './components/ExecutionList';
 import { ConnectionForm } from './components/ConnectionForm';
+import { ProcedureManager } from './components/ProcedureManager';
 import { connectToOracle, checkExistingConnection, getCurrentConnection, disconnect, ConnectionParams } from './services/oracleConnection';
 
 type TabType = 'dashboard' | 'procedures' | 'executions';
@@ -20,6 +21,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [selectedProcedure, setSelectedProcedure] = useState<OracleProcedure | null>(null);
   const [showExecutionModal, setShowExecutionModal] = useState(false);
+  const [showProcedureManager, setShowProcedureManager] = useState(false);
   
   const { executions, stats, addExecution, clearExecutions } = useExecutions();
   const { procedures, loading: proceduresLoading, error: proceduresError, refreshProcedures, updateProcedureStats } = useProcedures(isConnected);
@@ -92,6 +94,11 @@ function App() {
     }
   };
 
+  const handleProcedureAdded = () => {
+    refreshProcedures();
+    setShowProcedureManager(false);
+  };
+
   // Se non connesso, mostra il form di connessione
   if (!isConnected) {
     return (
@@ -132,6 +139,15 @@ function App() {
             </div>
             
             <div className="flex items-center space-x-4">
+              <button
+                onClick={() => setShowProcedureManager(true)}
+                className="flex items-center space-x-2 px-3 py-2 text-sm text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-colors"
+                title="Crea nuova procedura"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Nuova Procedura</span>
+              </button>
+
               <button
                 onClick={refreshProcedures}
                 className="flex items-center space-x-2 px-3 py-2 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
@@ -212,6 +228,14 @@ function App() {
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Azioni Rapide</h3>
               <div className="flex flex-wrap gap-3">
                 <button
+                  onClick={() => setShowProcedureManager(true)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-green-500 text-white hover:bg-green-600 rounded-lg transition-colors"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Crea Procedura</span>
+                </button>
+
+                <button
                   onClick={() => setActiveTab('procedures')}
                   className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white hover:bg-blue-600 rounded-lg transition-colors"
                 >
@@ -267,14 +291,23 @@ function App() {
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">Procedures</h2>
                 <p className="text-gray-600">Available Oracle procedures for execution</p>
               </div>
-              <button
-                onClick={refreshProcedures}
-                disabled={proceduresLoading}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white hover:bg-blue-600 disabled:bg-gray-400 rounded-lg transition-colors"
-              >
-                <RefreshCw className={`h-4 w-4 ${proceduresLoading ? 'animate-spin' : ''}`} />
-                <span>{proceduresLoading ? 'Caricamento...' : 'Ricarica'}</span>
-              </button>
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => setShowProcedureManager(true)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-green-500 text-white hover:bg-green-600 rounded-lg transition-colors"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Nuova Procedura</span>
+                </button>
+                <button
+                  onClick={refreshProcedures}
+                  disabled={proceduresLoading}
+                  className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white hover:bg-blue-600 disabled:bg-gray-400 rounded-lg transition-colors"
+                >
+                  <RefreshCw className={`h-4 w-4 ${proceduresLoading ? 'animate-spin' : ''}`} />
+                  <span>{proceduresLoading ? 'Caricamento...' : 'Ricarica'}</span>
+                </button>
+              </div>
             </div>
 
             {proceduresError && (
@@ -351,6 +384,14 @@ function App() {
           procedure={selectedProcedure}
           onClose={handleCloseModal}
           onExecute={handleExecutionComplete}
+        />
+      )}
+
+      {/* Procedure Manager Modal */}
+      {showProcedureManager && (
+        <ProcedureManager
+          onProcedureAdded={handleProcedureAdded}
+          onClose={() => setShowProcedureManager(false)}
         />
       )}
     </div>
